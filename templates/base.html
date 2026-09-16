@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quickmeal CAPI Dashboard</title>
+    <!-- Using Tailwind CSS via CDN as requested for lightweight setup without NPM -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-800">
+    <nav class="bg-blue-600 p-4 text-white shadow-md">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold">Quickmeal CAPI Dashboard</h1>
+            <div>
+                {% if session.get('logged_in') %}
+                <a href="{{ url_for('dashboard') }}" class="mr-4 hover:underline">Dashboard</a>
+                <a href="{{ url_for('leads') }}" class="mr-4 hover:underline">Leads</a>
+                <a href="{{ url_for('logout') }}" class="hover:underline">Logout</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+    <main class="container mx-auto mt-8 p-4">
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>
