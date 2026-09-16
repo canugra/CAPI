@@ -2,7 +2,7 @@
 {% block content %}
 
 <!-- Header -->
-<div class="flex justify-between items-center mb-8 mt-2">
+<div class="flex justify-between items-center mb-10 mt-2">
     <div>
         <h2 class="text-2xl font-bold text-brand-navy">Good afternoon, {{ session.get('username', 'Admin') }}</h2>
         <p class="text-sm text-gray-500 mt-1">Here's what's happening with your WhatsApp leads and sales today</p>
@@ -30,7 +30,7 @@
 <!-- KPI Row -->
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
     <!-- Total Leads -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex items-start space-x-4">
+    <div class="bg-white rounded-2xl shadow-[0_4px_24px_-4px_rgba(0,0,0,0.02)] border border-gray-100/50 p-6 flex items-start space-x-4">
         <div class="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-500">
             <i data-feather="users" class="w-6 h-6"></i>
         </div>
@@ -38,12 +38,12 @@
             <p class="text-sm font-medium text-gray-500">Total Leads</p>
             <h3 class="text-2xl font-bold text-brand-navy mt-1">{{ total_leads }}</h3>
             <p class="text-xs font-medium text-brand-green mt-2 flex items-center">
-                <i data-feather="arrow-up" class="w-3 h-3 mr-1"></i> 12% <span class="text-gray-400 ml-1 font-normal">vs previous 30 days</span>
+                <i data-feather="arrow-up" class="w-3 h-3 mr-1"></i> 12% <span class="text-gray-400 ml-1 font-normal whitespace-nowrap">vs previous 30 days</span>
             </p>
         </div>
     </div>
     <!-- Paid Orders -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex items-start space-x-4">
+    <div class="bg-white rounded-2xl shadow-[0_4px_24px_-4px_rgba(0,0,0,0.02)] border border-gray-100/50 p-6 flex items-start space-x-4">
         <div class="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center text-brand-green">
             <i data-feather="shopping-cart" class="w-6 h-6"></i>
         </div>
@@ -51,12 +51,12 @@
             <p class="text-sm font-medium text-gray-500">Paid Orders</p>
             <h3 class="text-2xl font-bold text-brand-navy mt-1">{{ paid_orders }}</h3>
             <p class="text-xs font-medium text-brand-green mt-2 flex items-center">
-                <i data-feather="arrow-up" class="w-3 h-3 mr-1"></i> 8% <span class="text-gray-400 ml-1 font-normal">vs previous 30 days</span>
+                <i data-feather="arrow-up" class="w-3 h-3 mr-1"></i> 8% <span class="text-gray-400 ml-1 font-normal whitespace-nowrap">vs previous 30 days</span>
             </p>
         </div>
     </div>
     <!-- Conversion Rate -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex items-start space-x-4">
+    <div class="bg-white rounded-2xl shadow-[0_4px_24px_-4px_rgba(0,0,0,0.02)] border border-gray-100/50 p-6 flex items-start space-x-4">
         <div class="w-12 h-12 rounded-full bg-purple-50 flex items-center justify-center text-purple-500">
             <i data-feather="percent" class="w-6 h-6"></i>
         </div>
@@ -64,12 +64,12 @@
             <p class="text-sm font-medium text-gray-500">Conversion Rate</p>
             <h3 class="text-2xl font-bold text-brand-navy mt-1">{{ conversion_rate }}%</h3>
             <p class="text-xs font-medium text-brand-green mt-2 flex items-center">
-                <i data-feather="arrow-up" class="w-3 h-3 mr-1"></i> 2.1% <span class="text-gray-400 ml-1 font-normal">vs previous 30 days</span>
+                <i data-feather="arrow-up" class="w-3 h-3 mr-1"></i> 2.1% <span class="text-gray-400 ml-1 font-normal whitespace-nowrap">vs previous 30 days</span>
             </p>
         </div>
     </div>
     <!-- Revenue -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex items-start space-x-4">
+    <div class="bg-white rounded-2xl shadow-[0_4px_24px_-4px_rgba(0,0,0,0.02)] border border-gray-100/50 p-6 flex items-start space-x-4">
         <div class="w-12 h-12 rounded-full bg-yellow-50 flex items-center justify-center text-yellow-500">
             <i data-feather="dollar-sign" class="w-6 h-6"></i>
         </div>
@@ -77,7 +77,7 @@
             <p class="text-sm font-medium text-gray-500">Revenue</p>
             <h3 class="text-2xl font-bold text-brand-navy mt-1">{{ revenue|currency }}</h3>
             <p class="text-xs font-medium text-brand-green mt-2 flex items-center">
-                <i data-feather="arrow-up" class="w-3 h-3 mr-1"></i> 9% <span class="text-gray-400 ml-1 font-normal">vs previous 30 days</span>
+                <i data-feather="arrow-up" class="w-3 h-3 mr-1"></i> 9% <span class="text-gray-400 ml-1 font-normal whitespace-nowrap">vs previous 30 days</span>
             </p>
         </div>
     </div>
@@ -85,7 +85,7 @@
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
     <!-- Meta Ads Performance (Stage A) -->
-    <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+    <div class="lg:col-span-2 bg-white rounded-2xl shadow-[0_4px_24px_-4px_rgba(0,0,0,0.02)] border border-gray-100/50 p-6">
         <div class="flex justify-between items-center mb-6">
             <div class="flex items-center space-x-3">
                 <div class="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
@@ -122,7 +122,7 @@
     </div>
 
     <!-- System Health -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+    <div class="bg-white rounded-2xl shadow-[0_4px_24px_-4px_rgba(0,0,0,0.02)] border border-gray-100/50 p-6">
         <div class="flex items-center space-x-3 mb-6">
             <div class="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center text-brand-green">
                 <i data-feather="settings" class="w-4 h-4"></i>
@@ -139,21 +139,21 @@
                     <div class="w-2 h-2 rounded-full bg-brand-green mr-2"></div>
                     WhatsApp Webhook
                 </div>
-                <span class="bg-green-100 text-brand-green text-xs font-semibold px-2 py-1 rounded">Healthy</span>
+                <span class="bg-green-50 text-green-600 text-xs font-medium px-3 py-1 rounded-full">Healthy</span>
             </div>
             <div class="flex justify-between items-center">
                 <div class="flex items-center text-sm font-medium text-gray-700">
                     <div class="w-2 h-2 rounded-full bg-brand-green mr-2"></div>
                     Meta CAPI
                 </div>
-                <span class="bg-green-100 text-brand-green text-xs font-semibold px-2 py-1 rounded">Healthy</span>
+                <span class="bg-green-50 text-green-600 text-xs font-medium px-3 py-1 rounded-full">Healthy</span>
             </div>
             <div class="flex justify-between items-center">
                 <div class="flex items-center text-sm font-medium text-gray-700">
                     <div class="w-2 h-2 rounded-full bg-brand-green mr-2"></div>
                     Database & Cron
                 </div>
-                <span class="bg-green-100 text-brand-green text-xs font-semibold px-2 py-1 rounded">Healthy</span>
+                <span class="bg-green-50 text-green-600 text-xs font-medium px-3 py-1 rounded-full">Healthy</span>
             </div>
             
             <hr class="border-gray-100 my-4">
@@ -177,7 +177,7 @@
 <!-- Funnel & Sources -->
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
     <!-- Funnel -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+    <div class="bg-white rounded-2xl shadow-[0_4px_24px_-4px_rgba(0,0,0,0.02)] border border-gray-100/50 p-6">
         <div class="flex justify-between items-center mb-6">
             <div class="flex items-center space-x-3">
                 <div class="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-500">
@@ -231,7 +231,7 @@
     </div>
     
     <!-- Sources -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col">
+    <div class="bg-white rounded-2xl shadow-[0_4px_24px_-4px_rgba(0,0,0,0.02)] border border-gray-100/50 p-6 flex flex-col">
         <div class="flex items-center space-x-3 mb-6">
             <div class="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-500">
                 <i data-feather="pie-chart" class="w-4 h-4"></i>
@@ -289,7 +289,7 @@
 </div>
 
 <!-- Recent Leads Table -->
-<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-12">
+<div class="bg-white rounded-2xl shadow-[0_4px_24px_-4px_rgba(0,0,0,0.02)] border border-gray-100/50 p-6 mb-12">
     <div class="flex justify-between items-center mb-6">
         <div class="flex items-center space-x-3">
             <div class="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center text-brand-green">
@@ -307,7 +307,7 @@
     
     <div class="overflow-x-auto">
         <table class="w-full text-sm text-left">
-            <thead class="text-xs text-gray-500 uppercase border-b border-gray-100">
+            <thead class="text-xs text-gray-400 font-medium tracking-wide uppercase border-b border-gray-100/50">
                 <tr>
                     <th class="px-4 py-3 font-medium">Name</th>
                     <th class="px-4 py-3 font-medium">Phone</th>
