@@ -94,8 +94,8 @@
     {% endif %}
 
     <!-- Main Content -->
-    <div class="{% if session.get('logged_in') %}ml-64{% endif %} flex-1 min-w-0 flex flex-col min-h-screen bg-brand-light p-8 lg:p-10">
-        <div class="max-w-7xl mx-auto w-full">
+    <div class="{% if session.get('logged_in') %}ml-64{% endif %} flex-1 min-w-0 flex flex-col min-h-screen bg-brand-light p-6 md:p-8">
+        <div class="w-full">
             {% block content %}{% endblock %}
         </div>
     </div>
