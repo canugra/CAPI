@@ -15,7 +15,7 @@ app.config['ADMIN_PASS'] = os.getenv('ADMIN_PASSWORD', 'secret')
 # --- Middleware / Auth ---
 @app.before_request
 def require_login():
-    allowed_routes = ['login', 'static', 'health_check', 'verify_webhook', 'receive_webhook']
+    allowed_routes = ['login', 'static', 'health_check', 'verify_webhook', 'receive_webhook', 'process_capi_cron']
     if request.endpoint not in allowed_routes and 'logged_in' not in session:
         return redirect(url_for('login'))
 
@@ -81,28 +81,28 @@ def lead_detail(lead_id):
     conn = get_db()
     cur = conn.cursor()
     
-    cur.execute("SELECT * FROM leads WHERE id = ?", (lead_id,))
+    cur.execute("SELECT * FROM leads WHERE id = %s", (lead_id,))
     lead = cur.fetchone()
     
     if not lead:
         return "Lead not found", 404
         
-    cur.execute("SELECT * FROM attribution_touches WHERE lead_id = ? ORDER BY received_at DESC", (lead_id,))
+    cur.execute("SELECT * FROM attribution_touches WHERE lead_id = %s ORDER BY received_at DESC", (lead_id,))
     touches = cur.fetchall()
     
-    cur.execute("SELECT * FROM orders WHERE lead_id = ? ORDER BY created_at DESC", (lead_id,))
+    cur.execute("SELECT * FROM orders WHERE lead_id = %s ORDER BY created_at DESC", (lead_id,))
     orders = cur.fetchall()
     
     # Fetch conversions for these orders
     order_ids = [str(o['id']) for o in orders]
     conversions = {}
     if order_ids:
-        placeholders = ','.join('?' * len(order_ids))
+        placeholders = ','.join(['%s'] * len(order_ids))
         cur.execute(f"SELECT * FROM conversion_events WHERE order_id IN ({placeholders})", order_ids)
         for row in cur.fetchall():
             conversions[row['order_id']] = row
     
-    cur.execute("SELECT * FROM whatsapp_messages WHERE lead_id = ? ORDER BY received_at DESC", (lead_id,))
+    cur.execute("SELECT * FROM whatsapp_messages WHERE lead_id = %s ORDER BY received_at DESC", (lead_id,))
     messages = cur.fetchall()
     
     return render_template('lead_detail.html', lead=lead, touches=touches, orders=orders, messages=messages, conversions=conversions)
@@ -121,16 +121,16 @@ def mark_paid(lead_id):
     
     try:
         cur.execute(
-            "INSERT INTO orders (order_number, lead_id, status, value, currency, paid_at, created_by) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)",
+            "INSERT INTO orders (order_number, lead_id, status, value, currency, paid_at, created_by) VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP, %s)",
             (order_number, lead_id, 'PAID', int(value), 'IDR', session.get('username', 'admin'))
         )
         new_order_id = cur.lastrowid
         
-        cur.execute("UPDATE leads SET status = 'PAID', updated_at = CURRENT_TIMESTAMP WHERE id = ?", (lead_id,))
+        cur.execute("UPDATE leads SET status = 'PAID', updated_at = CURRENT_TIMESTAMP WHERE id = %s", (lead_id,))
         
         # Log Audit
         cur.execute(
-            "INSERT INTO audit_logs (actor_id, action, entity_type, entity_id) VALUES (?, ?, ?, ?)",
+            "INSERT INTO audit_logs (actor_id, action, entity_type, entity_id) VALUES (%s, %s, %s, %s)",
             (session.get('username', 'admin'), 'MARK_PAID', 'lead', str(lead_id))
         )
         conn.commit()
@@ -139,12 +139,31 @@ def mark_paid(lead_id):
         print("Error marking paid:", e)
         return "Database error", 500
         
-    # Trigger CAPI in the background
-    import threading
+    # Trigger CAPI synchronously (Vercel doesn't support background threads well)
     from capi import send_conversion_to_meta
-    threading.Thread(target=send_conversion_to_meta, args=(new_order_id,)).start()
+    send_conversion_to_meta(new_order_id)
         
     return redirect(url_for('lead_detail', lead_id=lead_id))
+
+@app.route('/api/cron/process-capi', methods=['GET', 'POST'])
+def process_capi_cron():
+    """Endpoint for UptimeRobot/Cron to process retries automatically"""
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT order_id FROM conversion_events WHERE status = 'RETRY_SCHEDULED' AND attempt_count < 5")
+    events = cur.fetchall()
+    
+    from capi import send_conversion_to_meta
+    processed = 0
+    for event in events:
+        send_conversion_to_meta(event['order_id'])
+        processed += 1
+        
+    # Mark max retries as failed
+    cur.execute("UPDATE conversion_events SET status = 'FAILED', last_error = 'Max retries exceeded' WHERE status = 'RETRY_SCHEDULED' AND attempt_count >= 5")
+    conn.commit()
+    
+    return jsonify({"status": "ok", "retries_processed": processed}), 200
 
 @app.route('/leads/<int:lead_id>/mark-lost', methods=['POST'])
 def mark_lost(lead_id):
@@ -152,9 +171,9 @@ def mark_lost(lead_id):
     cur = conn.cursor()
     
     try:
-        cur.execute("UPDATE leads SET status = 'LOST', updated_at = CURRENT_TIMESTAMP WHERE id = ?", (lead_id,))
+        cur.execute("UPDATE leads SET status = 'LOST', updated_at = CURRENT_TIMESTAMP WHERE id = %s", (lead_id,))
         cur.execute(
-            "INSERT INTO audit_logs (actor_id, action, entity_type, entity_id) VALUES (?, ?, ?, ?)",
+            "INSERT INTO audit_logs (actor_id, action, entity_type, entity_id) VALUES (%s, %s, %s, %s)",
             (session.get('username', 'admin'), 'MARK_LOST', 'lead', str(lead_id))
         )
         conn.commit()
@@ -168,14 +187,13 @@ def mark_lost(lead_id):
 def retry_conversion(conversion_id):
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT order_id FROM conversion_events WHERE id = ?", (conversion_id,))
+    cur.execute("SELECT order_id FROM conversion_events WHERE id = %s", (conversion_id,))
     conv = cur.fetchone()
     
     if conv:
-        # Trigger retry in background
-        import threading
+        # Trigger retry synchronously for Vercel
         from capi import send_conversion_to_meta
-        threading.Thread(target=send_conversion_to_meta, args=(conv['order_id'],)).start()
+        send_conversion_to_meta(conv['order_id'])
         
     # Redirect back to the referrer (which should be the lead detail page)
     return redirect(request.referrer or url_for('dashboard'))
@@ -203,7 +221,7 @@ def receive_webhook():
     # 1. Log the webhook event
     try:
         cur.execute(
-            "INSERT INTO webhook_events (provider, event_type, payload_json, status) VALUES (?, ?, ?, ?)",
+            "INSERT INTO webhook_events (provider, event_type, payload_json, status) VALUES (%s, %s, %s, %s)",
             ('META', 'whatsapp', json.dumps(data), 'RECEIVED')
         )
         conn.commit()
@@ -236,12 +254,12 @@ def receive_webhook():
                         continue
                         
                     # 3. Duplicate Protection (Idempotency)
-                    cur.execute("SELECT id FROM whatsapp_messages WHERE wa_message_id = ?", (wa_message_id,))
+                    cur.execute("SELECT id FROM whatsapp_messages WHERE wa_message_id = %s", (wa_message_id,))
                     if cur.fetchone():
                         continue # Already processed
                         
                     # 4. Lead Creation or Update
-                    cur.execute("SELECT id, source FROM leads WHERE wa_id = ?", (wa_id,))
+                    cur.execute("SELECT id, source FROM leads WHERE wa_id = %s", (wa_id,))
                     lead = cur.fetchone()
                     
                     received_at = datetime.fromtimestamp(int(timestamp)) if timestamp else datetime.utcnow()
@@ -256,7 +274,7 @@ def receive_webhook():
                         
                     if not lead:
                         cur.execute(
-                            "INSERT INTO leads (wa_id, phone_number, customer_name, source, first_message_at, last_message_at) VALUES (?, ?, ?, ?, ?, ?)",
+                            "INSERT INTO leads (wa_id, phone_number, customer_name, source, first_message_at, last_message_at) VALUES (%s, %s, %s, %s, %s, %s)",
                             (wa_id, wa_id, customer_name, current_source, received_at, received_at)
                         )
                         lead_id = cur.lastrowid
@@ -265,7 +283,7 @@ def receive_webhook():
                         # Upgrade source to META_AD if it was organic/unknown before
                         new_source = current_source if lead['source'] in ['UNKNOWN', 'ORGANIC'] and current_source == 'META_AD' else lead['source']
                         cur.execute(
-                            "UPDATE leads SET customer_name = ?, source = ?, last_message_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                            "UPDATE leads SET customer_name = %s, source = %s, last_message_at = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
                             (customer_name, new_source, received_at, lead_id)
                         )
                         
@@ -289,7 +307,7 @@ def receive_webhook():
                         
                     # 5. Store Message Metadata
                     cur.execute(
-                        "INSERT INTO whatsapp_messages (lead_id, wa_message_id, direction, message_type, received_at, raw_payload_json) VALUES (?, ?, ?, ?, ?, ?)",
+                        "INSERT INTO whatsapp_messages (lead_id, wa_message_id, direction, message_type, received_at, raw_payload_json) VALUES (%s, %s, %s, %s, %s, %s)",
                         (lead_id, wa_message_id, 'INBOUND', message_type, received_at, json.dumps(message))
                     )
                     

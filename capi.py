@@ -14,7 +14,7 @@ def send_conversion_to_meta(order_id):
     cur = conn.cursor()
     
     # 1. Fetch Order
-    cur.execute("SELECT * FROM orders WHERE id = ?", (order_id,))
+    cur.execute("SELECT * FROM orders WHERE id = %s", (order_id,))
     order = cur.fetchone()
     if not order or order['status'] != 'PAID':
         return
@@ -22,7 +22,7 @@ def send_conversion_to_meta(order_id):
     lead_id = order['lead_id']
     
     # 2. Check if a conversion record already exists for this order
-    cur.execute("SELECT id, status FROM conversion_events WHERE order_id = ? AND event_name = 'Purchase'", (order_id,))
+    cur.execute("SELECT id, status FROM conversion_events WHERE order_id = %s AND event_name = 'Purchase'", (order_id,))
     existing_event = cur.fetchone()
     
     if existing_event and existing_event['status'] == 'SUCCESS':
@@ -30,7 +30,7 @@ def send_conversion_to_meta(order_id):
         return
         
     # 3. Find latest eligible attribution touch
-    cur.execute("SELECT ctwa_clid FROM attribution_touches WHERE lead_id = ? AND ctwa_clid IS NOT NULL ORDER BY received_at DESC LIMIT 1", (lead_id,))
+    cur.execute("SELECT ctwa_clid FROM attribution_touches WHERE lead_id = %s AND ctwa_clid IS NOT NULL ORDER BY received_at DESC LIMIT 1", (lead_id,))
     touch = cur.fetchone()
     
     if not touch:
@@ -82,7 +82,7 @@ def send_conversion_to_meta(order_id):
     }
     
     # Update attempt
-    cur.execute("UPDATE conversion_events SET status = 'SENDING', attempt_count = attempt_count + 1, last_attempt_at = CURRENT_TIMESTAMP WHERE id = ?", (conversion_id,))
+    cur.execute("UPDATE conversion_events SET status = 'SENDING', attempt_count = attempt_count + 1, last_attempt_at = CURRENT_TIMESTAMP WHERE id = %s", (conversion_id,))
     conn.commit()
     
     access_token = os.getenv('META_ACCESS_TOKEN')
@@ -90,7 +90,7 @@ def send_conversion_to_meta(order_id):
     api_version = os.getenv('META_GRAPH_API_VERSION', 'v19.0')
     
     if not access_token or not waba_id:
-        cur.execute("UPDATE conversion_events SET status = 'FAILED', last_error = 'Missing Meta Credentials' WHERE id = ?", (conversion_id,))
+        cur.execute("UPDATE conversion_events SET status = 'FAILED', last_error = 'Missing Meta Credentials' WHERE id = %s", (conversion_id,))
         conn.commit()
         return
 
@@ -124,13 +124,13 @@ def send_conversion_to_meta(order_id):
     except requests.exceptions.RequestException as e:
         # Network errors are retryable
         cur.execute(
-            "UPDATE conversion_events SET status = 'RETRY_SCHEDULED', last_error = ? WHERE id = ?",
+            "UPDATE conversion_events SET status = 'RETRY_SCHEDULED', last_error = %s WHERE id = %s",
             (str(e), conversion_id)
         )
         conn.commit()
     except Exception as e:
         cur.execute(
-            "UPDATE conversion_events SET status = 'FAILED', last_error = ? WHERE id = ?",
+            "UPDATE conversion_events SET status = 'FAILED', last_error = %s WHERE id = %s",
             (str(e), conversion_id)
         )
         conn.commit()
