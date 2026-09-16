@@ -12,6 +12,13 @@ app.secret_key = os.getenv('SESSION_SECRET', 'super_secret_fallback')
 app.config['ADMIN_USER'] = os.getenv('ADMIN_USERNAME', 'admin')
 app.config['ADMIN_PASS'] = os.getenv('ADMIN_PASSWORD', 'secret')
 
+@app.template_filter('currency')
+def format_currency(value):
+    try:
+        return f"Rp {int(value):,}".replace(",", ".")
+    except (ValueError, TypeError):
+        return "Rp 0"
+
 # --- Middleware / Auth ---
 @app.before_request
 def require_login():
@@ -41,15 +48,68 @@ def logout():
 @app.route('/dashboard')
 def dashboard():
     conn = get_db()
-    # Basic metrics
     cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) as total_leads FROM leads")
-    total_leads = cur.fetchone()['total_leads']
     
-    cur.execute("SELECT COUNT(*) as total_orders FROM orders WHERE status='PAID'")
-    total_orders = cur.fetchone()['total_orders']
+    # 1. KPI Row
+    cur.execute("SELECT COUNT(*) as total FROM leads")
+    total_leads = cur.fetchone()['total'] or 0
+    
+    cur.execute("SELECT COUNT(DISTINCT lead_id) as paid FROM orders WHERE status='PAID'")
+    paid_orders = cur.fetchone()['paid'] or 0
+    
+    cur.execute("SELECT SUM(value) as rev FROM orders WHERE status='PAID'")
+    revenue = cur.fetchone()['rev'] or 0
+    
+    conversion_rate = round((paid_orders / total_leads * 100) if total_leads > 0 else 0, 1)
 
-    return render_template('dashboard.html', total_leads=total_leads, total_orders=total_orders)
+    # 2. Lead Sources (Donut Chart Data)
+    cur.execute("SELECT source, COUNT(*) as count FROM leads GROUP BY source")
+    source_counts = cur.fetchall()
+    sources = {'META_AD': 0, 'ORGANIC': 0, 'UNKNOWN': 0}
+    for s in source_counts:
+        src = s['source'] if s['source'] in sources else 'UNKNOWN'
+        sources[src] += s['count']
+        
+    # 3. System Health
+    cur.execute("SELECT received_at FROM whatsapp_messages ORDER BY received_at DESC LIMIT 1")
+    last_wa = cur.fetchone()
+    
+    cur.execute("SELECT sent_at FROM conversion_events WHERE status='SUCCESS' ORDER BY sent_at DESC LIMIT 1")
+    last_capi = cur.fetchone()
+    
+    cur.execute("SELECT COUNT(*) as succ FROM conversion_events WHERE status='SUCCESS'")
+    capi_success = cur.fetchone()['succ'] or 0
+    
+    cur.execute("SELECT COUNT(*) as fail FROM conversion_events WHERE status='FAILED'")
+    capi_failed = cur.fetchone()['fail'] or 0
+    
+    cur.execute("SELECT COUNT(*) as pend FROM conversion_events WHERE status='PENDING' OR status='RETRY_SCHEDULED'")
+    capi_pending = cur.fetchone()['pend'] or 0
+
+    # 4. Recent Leads
+    cur.execute("""
+        SELECT l.*, o.value as order_value, o.status as order_status, c.status as capi_status 
+        FROM leads l
+        LEFT JOIN orders o ON o.lead_id = l.id
+        LEFT JOIN conversion_events c ON c.order_id = o.id
+        ORDER BY l.last_message_at DESC LIMIT 5
+    """)
+    recent_leads = cur.fetchall()
+
+    return render_template(
+        'dashboard.html', 
+        total_leads=total_leads, 
+        paid_orders=paid_orders,
+        conversion_rate=conversion_rate,
+        revenue=revenue,
+        sources=sources,
+        last_wa=last_wa['received_at'] if last_wa else None,
+        last_capi=last_capi['sent_at'] if last_capi else None,
+        capi_success=capi_success,
+        capi_failed=capi_failed,
+        capi_pending=capi_pending,
+        recent_leads=recent_leads
+    )
 
 @app.route('/api/health/integrations')
 def health_check():

@@ -4,24 +4,103 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quickmeal CAPI Dashboard</title>
-    <!-- Using Tailwind CSS via CDN as requested for lightweight setup without NPM -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Poppins', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            navy: '#0D1B2A',
+                            light: '#F2F4F7',
+                            green: '#4CAF50'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Simple icon library via CDN (Feather icons) -->
+    <script src="https://unpkg.com/feather-icons"></script>
 </head>
-<body class="bg-gray-100 min-h-screen text-gray-800">
-    <nav class="bg-blue-600 p-4 text-white shadow-md">
-        <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-xl font-bold">Quickmeal CAPI Dashboard</h1>
-            <div>
-                {% if session.get('logged_in') %}
-                <a href="{{ url_for('dashboard') }}" class="mr-4 hover:underline">Dashboard</a>
-                <a href="{{ url_for('leads') }}" class="mr-4 hover:underline">Leads</a>
-                <a href="{{ url_for('logout') }}" class="hover:underline">Logout</a>
-                {% endif %}
+<body class="bg-brand-light min-h-screen text-gray-800 font-sans flex">
+
+    {% if session.get('logged_in') %}
+    <!-- Sidebar -->
+    <aside class="w-64 bg-brand-navy text-white min-h-screen flex flex-col fixed inset-y-0 left-0 z-10">
+        <!-- Logo -->
+        <div class="p-6">
+            <h1 class="text-2xl font-bold text-white tracking-tight">Quickmeal<span class="text-brand-green">.</span></h1>
+            <p class="text-xs text-gray-400 mt-1">Real Food Made Easy</p>
+        </div>
+
+        <!-- Navigation -->
+        <nav class="flex-1 px-4 space-y-2 mt-4">
+            <a href="{{ url_for('dashboard') }}" class="flex items-center space-x-3 px-4 py-3 rounded-lg {% if request.endpoint == 'dashboard' %}bg-brand-green text-white font-semibold{% else %}text-gray-300 hover:bg-gray-800 hover:text-white transition-colors{% endif %}">
+                <i data-feather="home" class="w-5 h-5"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="{{ url_for('leads') }}" class="flex items-center space-x-3 px-4 py-3 rounded-lg {% if request.endpoint == 'leads' %}bg-brand-green text-white font-semibold{% else %}text-gray-300 hover:bg-gray-800 hover:text-white transition-colors{% endif %}">
+                <i data-feather="users" class="w-5 h-5"></i>
+                <span>Leads</span>
+            </a>
+            <a href="#" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                <i data-feather="shopping-cart" class="w-5 h-5"></i>
+                <span>Orders</span>
+            </a>
+            <a href="#" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                <i data-feather="server" class="w-5 h-5"></i>
+                <span>CAPI Logs</span>
+            </a>
+            <a href="#" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                <i data-feather="bar-chart-2" class="w-5 h-5"></i>
+                <span>Analytics</span>
+            </a>
+            <a href="#" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                <i data-feather="settings" class="w-5 h-5"></i>
+                <span>Settings</span>
+            </a>
+        </nav>
+
+        <!-- Bottom Actions -->
+        <div class="p-4 mb-4">
+            <div class="bg-gray-800/50 rounded-lg p-4 flex items-center space-x-3 cursor-pointer hover:bg-gray-700 transition-colors">
+                <div class="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center text-brand-green">
+                    <i data-feather="message-circle" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-300">Need help?</p>
+                    <p class="text-sm font-medium text-white">Contact Support</p>
+                </div>
+            </div>
+            
+            <div class="mt-6 flex items-center space-x-3 px-2">
+                <div class="w-8 h-8 rounded-full bg-white text-brand-navy flex items-center justify-center font-bold text-sm">
+                    Q
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-white">Quickmeal</p>
+                    <p class="text-xs text-gray-400">v1.0.0</p>
+                </div>
             </div>
         </div>
-    </nav>
-    <main class="container mx-auto mt-8 p-4">
+    </aside>
+    {% endif %}
+
+    <!-- Main Content -->
+    <div class="{% if session.get('logged_in') %}ml-64{% endif %} flex-1 min-w-0 flex flex-col min-h-screen">
         {% block content %}{% endblock %}
-    </main>
+    </div>
+
+    <script>
+        // Initialize Feather icons
+        feather.replace();
+    </script>
 </body>
 </html>
