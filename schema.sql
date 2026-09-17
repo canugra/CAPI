@@ -100,3 +100,9 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     after_json TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS system_settings (
+    setting_key VARCHAR(255) PRIMARY KEY,
+    setting_value TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);

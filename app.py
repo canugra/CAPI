@@ -19,6 +19,26 @@ def format_currency(value):
     except (ValueError, TypeError):
         return "Rp 0"
 
+# --- System Settings Helper ---
+def get_setting(key, default=None):
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT setting_value FROM system_settings WHERE setting_key = %s", (key,))
+        row = cur.fetchone()
+        return row['setting_value'] if row else default
+    except Exception:
+        return default
+
+def set_setting(key, value):
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("INSERT INTO system_settings (setting_key, setting_value) VALUES (%s, %s) ON DUPLICATE KEY UPDATE setting_value = %s", (key, value, value))
+        conn.commit()
+    except Exception as e:
+        print("Set setting failed:", e)
+
 # --- Middleware / Auth ---
 @app.before_request
 def require_login():
@@ -378,6 +398,57 @@ def receive_webhook():
         return 'Processed with errors', 200
 
     return 'OK', 200
+
+# if main
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=True)
+
+@app.route('/settings')
+def settings():
+    waba_id = get_setting('META_WABA_ID')
+    phone_id = get_setting('META_PHONE_NUMBER_ID')
+    meta_app_id = os.getenv('META_APP_ID', '')
+    return render_template('settings.html', waba_id=waba_id, phone_id=phone_id, meta_app_id=meta_app_id)
+
+import requests
+@app.route('/api/meta/auth-callback', methods=['POST'])
+def meta_auth_callback():
+    data = request.json
+    access_token = data.get('access_token')
+    if not access_token:
+        return jsonify({'error': 'No access token provided'}), 400
+    
+    headers = {'Authorization': f'Bearer {access_token}'}
+    biz_req = requests.get('https://graph.facebook.com/v19.0/me/businesses', headers=headers)
+    businesses = biz_req.json().get('data', [])
+    waba_id, phone_id = None, None
+    
+    for biz in businesses:
+        biz_id = biz['id']
+        waba_req = requests.get(f'https://graph.facebook.com/v19.0/{biz_id}/owned_whatsapp_business_accounts', headers=headers)
+        wabas = waba_req.json().get('data', [])
+        if not wabas:
+            waba_req = requests.get(f'https://graph.facebook.com/v19.0/{biz_id}/client_whatsapp_business_accounts', headers=headers)
+            wabas = waba_req.json().get('data', [])
+        for waba in wabas:
+            waba_id = waba['id']
+            phone_req = requests.get(f'https://graph.facebook.com/v19.0/{waba_id}/phone_numbers', headers=headers)
+            phones = phone_req.json().get('data', [])
+            for phone in phones:
+                phone_id = phone['id']
+                break
+            if phone_id:
+                break
+        if waba_id and phone_id:
+            break
+            
+    if waba_id and phone_id:
+        set_setting('META_WABA_ID', waba_id)
+        set_setting('META_PHONE_NUMBER_ID', phone_id)
+        set_setting('META_ACCESS_TOKEN', access_token)
+        return jsonify({'status': 'success', 'waba_id': waba_id, 'phone_id': phone_id})
+    return jsonify({'error': 'No WABA or Phone found linked to this account.'}), 400
+
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

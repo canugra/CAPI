@@ -62,7 +62,7 @@
                 <i data-feather="bar-chart-2" class="w-5 h-5"></i>
                 <span>Analytics</span>
             </a>
-            <a href="#" class="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+            <a href="{{ url_for('settings') }}" class="flex items-center space-x-3 px-4 py-3 rounded-lg {% if request.endpoint == 'settings' %}bg-brand-green text-white font-semibold{% else %}text-gray-300 hover:bg-gray-800 hover:text-white transition-colors{% endif %}">
                 <i data-feather="settings" class="w-5 h-5"></i>
                 <span>Settings</span>
             </a>

@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mb-8 mt-2">
+    <h2 class="text-2xl font-bold text-brand-navy">Settings</h2>
+    <p class="text-sm text-gray-500 mt-1">Manage your system configurations and Meta integrations</p>
+</div>
+
+<!-- Meta Ads Integration -->
+<div class="bg-white rounded-2xl shadow-[0_4px_24px_-4px_rgba(0,0,0,0.02)] border border-gray-100/50 p-6 mb-8">
+    <div class="flex items-center space-x-3 mb-6">
+        <div class="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
+            <i data-feather="facebook" class="w-4 h-4"></i>
+        </div>
+        <div>
+            <h3 class="text-base font-bold text-brand-navy">WhatsApp Business App Coexistence</h3>
+            <p class="text-xs text-gray-400">Connect your existing WhatsApp Business number without deleting it</p>
+        </div>
+    </div>
+
+    <div class="space-y-4">
+        {% if waba_id and phone_id %}
+        <div class="bg-green-50 text-green-700 p-4 rounded-lg flex items-start space-x-3">
+            <i data-feather="check-circle" class="w-5 h-5 mt-0.5"></i>
+            <div>
+                <h4 class="font-semibold text-sm">WhatsApp Business: Connected</h4>
+                <p class="text-xs mt-1">API: Connected</p>
+                <div class="mt-2 text-xs font-mono bg-white/50 p-2 rounded">
+                    <p>WABA ID: {{ waba_id }}</p>
+                    <p>Phone Number ID: {{ phone_id }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="mt-4">
+            <button onclick="launchWhatsAppSignup()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
+                Reconnect / Refresh Permissions
+            </button>
+        </div>
+        {% else %}
+        <div class="bg-gray-50 p-4 rounded-lg text-sm text-gray-600">
+            <p class="mb-4">Click the button below to start the official Meta Embedded Signup flow. Please follow these rules:</p>
+            <ul class="list-disc pl-5 space-y-1 mb-4 text-xs">
+                <li>Select your existing Business Portfolio (Quickmeal.id)</li>
+                <li>Select your existing WhatsApp Business Account</li>
+                <li>Select your existing WhatsApp number (DO NOT create a new one)</li>
+                <li>Follow the Coexistence pairing instructions if prompted by Meta</li>
+            </ul>
+            
+            {% if not meta_app_id %}
+            <div class="text-red-500 font-semibold mb-2 flex items-center">
+                <i data-feather="alert-triangle" class="w-4 h-4 mr-1"></i>
+                Missing META_APP_ID in Environment Variables
+            </div>
+            {% else %}
+            <button onclick="launchWhatsAppSignup()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center">
+                <i data-feather="link" class="w-4 h-4 mr-2"></i>
+                Connect WhatsApp
+            </button>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+  window.fbAsyncInit = function() {
+    FB.init({
+      appId            : '{{ meta_app_id }}',
+      autoLogAppEvents : true,
+      xfbml            : true,
+      version          : 'v19.0'
+    });
+  };
+</script>
+<script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
+
+<script>
+  function launchWhatsAppSignup() {
+    FB.login(function(response) {
+      if (response.authResponse) {
+        const accessToken = response.authResponse.accessToken;
+        
+        // Show loading state
+        const btn = event.currentTarget;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = 'Connecting... Please wait';
+        btn.disabled = true;
+
+        fetch('/api/meta/auth-callback', {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ access_token: accessToken })
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === 'success') {
+              alert('Successfully connected WhatsApp API via Coexistence!');
+              window.location.reload();
+          } else {
+              alert('Error: ' + (data.error || 'Unknown error'));
+              btn.innerHTML = originalText;
+              btn.disabled = false;
+          }
+        })
+        .catch(err => {
+            alert('Failed to contact server');
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        });
+
+      } else {
+        console.log('User cancelled login or did not fully authorize.');
+      }
+    }, {
+      scope: 'whatsapp_business_management,whatsapp_business_messaging',
+      extras: {
+        feature: 'whatsapp_embedded_signup',
+        version: 2,
+        sessionInfoVersion: '3'
+      }
+    });
+  }
+</script>
+{% endblock %}
