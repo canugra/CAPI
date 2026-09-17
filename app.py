@@ -431,12 +431,204 @@ def meta_auth_callback():
             waba_req = requests.get(f'https://graph.facebook.com/v19.0/{biz_id}/client_whatsapp_business_accounts', headers=headers)
             wabas = waba_req.json().get('data', [])
         for waba in wabas:
+        send_conversion_to_meta(event['order_id'])
+        processed += 1
+        
+    # Mark max retries as failed
+    cur.execute("UPDATE conversion_events SET status = 'FAILED', last_error = 'Max retries exceeded' WHERE status = 'RETRY_SCHEDULED' AND attempt_count >= 5")
+    conn.commit()
+    
+    return jsonify({"status": "ok", "retries_processed": processed}), 200
+
+@app.route('/leads/<int:lead_id>/mark-lost', methods=['POST'])
+def mark_lost(lead_id):
+    conn = get_db()
+    cur = conn.cursor()
+    
+    try:
+        cur.execute("UPDATE leads SET status = 'LOST', updated_at = CURRENT_TIMESTAMP WHERE id = %s", (lead_id,))
+        cur.execute(
+            "INSERT INTO audit_logs (actor_id, action, entity_type, entity_id) VALUES (%s, %s, %s, %s)",
+            (session.get('username', 'admin'), 'MARK_LOST', 'lead', str(lead_id))
+        )
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        return "Database error", 500
+        
+    return redirect(url_for('lead_detail', lead_id=lead_id))
+
+@app.route('/conversions/<int:conversion_id>/retry', methods=['POST'])
+def retry_conversion(conversion_id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT order_id FROM conversion_events WHERE id = %s", (conversion_id,))
+    conv = cur.fetchone()
+    
+    if conv:
+        # Trigger retry synchronously for Vercel
+        from capi import send_conversion_to_meta
+        send_conversion_to_meta(conv['order_id'])
+        
+    # Redirect back to the referrer (which should be the lead detail page)
+    return redirect(request.referrer or url_for('dashboard'))
+
+# --- Webhook Routes ---
+@app.route('/api/webhooks/whatsapp', methods=['GET'])
+def verify_webhook():
+    mode = request.args.get('hub.mode')
+    token = request.args.get('hub.verify_token')
+    challenge = request.args.get('hub.challenge')
+
+    if mode and token:
+        if mode == 'subscribe' and token == os.getenv('WHATSAPP_VERIFY_TOKEN'):
+            return challenge, 200
+        else:
+            return 'Forbidden', 403
+    return 'Bad Request', 400
+
+@app.route('/api/webhooks/whatsapp', methods=['POST'])
+def receive_webhook():
+    data = request.json
+    conn = get_db()
+    cur = conn.cursor()
+    
+    # 1. Log the webhook event
+    try:
+        cur.execute(
+            "INSERT INTO webhook_events (provider, event_type, payload_json, status) VALUES (%s, %s, %s, %s)",
+            ('META', 'whatsapp', json.dumps(data), 'RECEIVED')
+        )
+        conn.commit()
+    except Exception as e:
+        print("Failed to log webhook:", e)
+
+    # 2. Parse Meta Webhook Format
+    try:
+        if data and data.get('object') == 'whatsapp_business_account':
+            for entry in data.get('entry', []):
+                for change in entry.get('changes', []):
+                    value = change.get('value', {})
+                    
+                    contacts = value.get('contacts', [])
+                    messages = value.get('messages', [])
+                    
+                    if not contacts or not messages:
+                        continue
+                        
+                    contact = contacts[0]
+                    message = messages[0]
+                    
+                    wa_id = contact.get('wa_id')
+                    customer_name = contact.get('profile', {}).get('name')
+                    wa_message_id = message.get('id')
+                    timestamp = message.get('timestamp')
+                    message_type = message.get('type')
+                    
+                    if not wa_id or not wa_message_id:
+                        continue
+                        
+                    # 3. Duplicate Protection (Idempotency)
+                    cur.execute("SELECT id FROM whatsapp_messages WHERE wa_message_id = %s", (wa_message_id,))
+                    if cur.fetchone():
+                        continue # Already processed
+                        
+                    # 4. Lead Creation or Update
+                    cur.execute("SELECT id, source FROM leads WHERE wa_id = %s", (wa_id,))
+                    lead = cur.fetchone()
+                    
+                    received_at = datetime.fromtimestamp(int(timestamp)) if timestamp else datetime.utcnow()
+                    
+                    # Extract Attribution
+                    referral = message.get('referral') or message.get('context', {}).get('referral')
+                    current_source = 'UNKNOWN'
+                    if referral:
+                        current_source = 'META_AD' if referral.get('ctwa_clid') else 'ORGANIC'
+                    else:
+                        current_source = 'ORGANIC'
+                        
+                    if not lead:
+                        cur.execute(
+                            "INSERT INTO leads (wa_id, phone_number, customer_name, source, first_message_at, last_message_at) VALUES (%s, %s, %s, %s, %s, %s)",
+                            (wa_id, wa_id, customer_name, current_source, received_at, received_at)
+                        )
+                        lead_id = cur.lastrowid
+                    else:
+                        lead_id = lead['id']
+                        # Upgrade source to META_AD if it was organic/unknown before
+                        new_source = current_source if lead['source'] in ['UNKNOWN', 'ORGANIC'] and current_source == 'META_AD' else lead['source']
+                        cur.execute(
+                            "UPDATE leads SET customer_name = %s, source = %s, last_message_at = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                            (customer_name, new_source, received_at, lead_id)
+                        )
+                        
+                    # Capture Attribution Touch
+                    if referral:
+                        ctwa_clid = referral.get('ctwa_clid')
+                        source_id = referral.get('source_id')
+                        source_url = referral.get('source_url')
+                        source_type = referral.get('source_type')
+                        headline = referral.get('headline')
+                        body = referral.get('body')
+                        media_type = referral.get('media_type')
+                        
+                        if ctwa_clid or source_id or source_url:
+                            cur.execute(
+                                """INSERT INTO attribution_touches 
+                                (lead_id, ctwa_clid, source_id, source_type, source_url, headline, body, media_type, raw_referral_json, received_at) 
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                                (lead_id, ctwa_clid, source_id, source_type, source_url, headline, body, media_type, json.dumps(referral), received_at)
+                            )
+                        
+                    # 5. Store Message Metadata
+                    cur.execute(
+                        "INSERT INTO whatsapp_messages (lead_id, wa_message_id, direction, message_type, received_at, raw_payload_json) VALUES (%s, %s, %s, %s, %s, %s)",
+                        (lead_id, wa_message_id, 'INBOUND', message_type, received_at, json.dumps(message))
+                    )
+                    
+                    conn.commit()
+    except Exception as e:
+        print("Webhook processing error:", e)
+        # Always return 200 to Meta to prevent endless retries for structural bugs
+        return 'Processed with errors', 200
+
+    return 'OK', 200
+
+# Removed invalid indented block
+
+@app.route('/settings')
+def settings():
+    waba_id = get_setting('META_WABA_ID')
+    phone_id = get_setting('META_PHONE_NUMBER_ID')
+    meta_app_id = os.getenv('META_APP_ID', '')
+    return render_template('settings.html', waba_id=waba_id, phone_id=phone_id, meta_app_id=meta_app_id)
+
+import requests
+@app.route('/api/meta/auth-callback', methods=['POST'])
+def meta_auth_callback():
+    data = request.json
+    access_token = data.get('access_token')
+    if not access_token:
+        return jsonify({'error': 'No access token provided'}), 400
+    
+    headers = {'Authorization': f'Bearer {access_token}'}
+    biz_req = requests.get('https://graph.facebook.com/v19.0/me/businesses', headers=headers)
+    businesses = biz_req.json().get('data', [])
+    waba_id, phone_id = None, None
+    
+    for biz in businesses:
+        biz_id = biz['id']
+        waba_req = requests.get(f'https://graph.facebook.com/v19.0/{biz_id}/owned_whatsapp_business_accounts', headers=headers)
+        wabas = waba_req.json().get('data', [])
+        if not wabas:
+            waba_req = requests.get(f'https://graph.facebook.com/v19.0/{biz_id}/client_whatsapp_business_accounts', headers=headers)
+            wabas = waba_req.json().get('data', [])
+        for waba in wabas:
             waba_id = waba['id']
             phone_req = requests.get(f'https://graph.facebook.com/v19.0/{waba_id}/phone_numbers', headers=headers)
             phones = phone_req.json().get('data', [])
             for phone in phones:
                 phone_id = phone['id']
-                break
             if phone_id:
                 break
         if waba_id and phone_id:
@@ -446,6 +638,13 @@ def meta_auth_callback():
         set_setting('META_WABA_ID', waba_id)
         set_setting('META_PHONE_NUMBER_ID', phone_id)
         set_setting('META_ACCESS_TOKEN', access_token)
+        
+        # Automatically subscribe the App to the WABA Webhooks
+        try:
+            requests.post(f'https://graph.facebook.com/v19.0/{waba_id}/subscribed_apps', headers=headers)
+        except Exception as e:
+            print("Failed to subscribe app to WABA:", e)
+            
         return jsonify({'status': 'success', 'waba_id': waba_id, 'phone_id': phone_id})
     return jsonify({'error': 'No WABA or Phone found linked to this account.'}), 400
 
