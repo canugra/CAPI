@@ -119,12 +119,7 @@
             console.log('User cancelled login or did not fully authorize.');
           }
         }, {
-          scope: 'whatsapp_business_management,whatsapp_business_messaging',
-          extras: {
-            feature: 'whatsapp_embedded_signup',
-            version: 2,
-            sessionInfoVersion: '3'
-          }
+          scope: 'whatsapp_business_management,whatsapp_business_messaging'
         });
     } catch (e) {
         console.error(e);
