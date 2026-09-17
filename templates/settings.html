@@ -75,51 +75,61 @@
 
 <script>
   function launchWhatsAppSignup() {
-    FB.login(function(response) {
-      if (response.authResponse) {
-        const accessToken = response.authResponse.accessToken;
-        
-        // Show loading state
-        const btn = event.currentTarget;
-        const originalText = btn.innerHTML;
-        btn.innerHTML = 'Connecting... Please wait';
-        btn.disabled = true;
+    if (typeof FB === 'undefined') {
+        alert("Facebook SDK belum termuat atau diblokir oleh AdBlocker. Matikan AdBlocker/Shields, lalu refresh halaman.");
+        return;
+    }
 
-        fetch('/api/meta/auth-callback', {
-          method: 'POST',
-          headers: {
-              'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ access_token: accessToken })
-        })
-        .then(res => res.json())
-        .then(data => {
-          if (data.status === 'success') {
-              alert('Successfully connected WhatsApp API via Coexistence!');
-              window.location.reload();
+    try {
+        FB.login(function(response) {
+          if (response.authResponse) {
+            const accessToken = response.authResponse.accessToken;
+            
+            // Show loading state
+            const btn = event.currentTarget;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = 'Connecting... Please wait';
+            btn.disabled = true;
+
+            fetch('/api/meta/auth-callback', {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ access_token: accessToken })
+            })
+            .then(res => res.json())
+            .then(data => {
+              if (data.status === 'success') {
+                  alert('Successfully connected WhatsApp API via Coexistence!');
+                  window.location.reload();
+              } else {
+                  alert('Error: ' + (data.error || 'Unknown error'));
+                  btn.innerHTML = originalText;
+                  btn.disabled = false;
+              }
+            })
+            .catch(err => {
+                alert('Failed to contact server');
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            });
+
           } else {
-              alert('Error: ' + (data.error || 'Unknown error'));
-              btn.innerHTML = originalText;
-              btn.disabled = false;
+            console.log('User cancelled login or did not fully authorize.');
           }
-        })
-        .catch(err => {
-            alert('Failed to contact server');
-            btn.innerHTML = originalText;
-            btn.disabled = false;
+        }, {
+          scope: 'whatsapp_business_management,whatsapp_business_messaging',
+          extras: {
+            feature: 'whatsapp_embedded_signup',
+            version: 2,
+            sessionInfoVersion: '3'
+          }
         });
-
-      } else {
-        console.log('User cancelled login or did not fully authorize.');
-      }
-    }, {
-      scope: 'whatsapp_business_management,whatsapp_business_messaging',
-      extras: {
-        feature: 'whatsapp_embedded_signup',
-        version: 2,
-        sessionInfoVersion: '3'
-      }
-    });
+    } catch (e) {
+        console.error(e);
+        alert("Terjadi kesalahan saat memanggil Facebook: " + e.message + "\n\nPastikan Domain Vercel sudah dimasukkan ke 'Allowed Domains' di Dashboard Meta.");
+    }
   }
 </script>
 {% endblock %}
